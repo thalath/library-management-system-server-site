@@ -31,8 +31,8 @@ class Config:
 
 
     
-    # JWT_COOKIE_CSRF_PROTECT=False
-    # JWT_LOGOUT_CSRF_PROTECT=False
+    JWT_COOKIE_CSRF_PROTECT=False
+    JWT_LOGOUT_CSRF_PROTECT=False
     JWT_COOKIE_SAMESITE='Lax'
 
 
