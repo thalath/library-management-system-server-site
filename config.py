@@ -29,7 +29,6 @@ class Config:
         days=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", 30))
     )
 
-
     
     JWT_COOKIE_CSRF_PROTECT=False
     JWT_LOGOUT_CSRF_PROTECT=False
