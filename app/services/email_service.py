@@ -1,3 +1,4 @@
+import os
 import smtplib
 
 from email.message import EmailMessage
@@ -35,17 +36,18 @@ Library Management System
     try:
         with smtplib.SMTP(
             current_app.config["MAIL_SERVER"],
-            current_app.config["MAIL_PORT"]
+            current_app.config["MAIL_PORT"],
+            timeout=20
         ) as server:
+            server.ehlo()
             server.starttls()
+            server.ehlo()
 
-            server.login(
-                sender_email,
-                sender_password
-            )
+            server.login(sender_email, sender_password)
             server.send_message(message)
+
         return True
 
-    except Exception:
+    except (smtplib.SMTPException, OSError):
         current_app.logger.exception("Failed to send OTP email.")
         return False

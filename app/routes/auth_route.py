@@ -5,11 +5,14 @@ from flask_jwt_extended import (jwt_required, create_access_token,
                                 set_refresh_cookies, unset_jwt_cookies)
 
 from app.services.user_service import UserService
+from app.services.email_service import send_otp_email
 from app.models.user import User
 from app.models.token_blocklist import TokenBlocklist
 from app.models.role import Role
 from extensions import db
 import re
+from app.utils import otp
+
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -141,6 +144,29 @@ def register():
             "msg": f"An internal backend error occured: {str(e)}",
             "status": 500
         }), 500
+
+
+@auth_bp.post("/send-otp")
+@jwt_required()
+def send_otp():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    receiver_email = user.email
+    create_otp = otp.generate_otp()
+
+    success = send_otp_email(receiver_email, create_otp)
+    if not success:
+        jsonify({"error": "Unable to send verification email. Please try again."}), 503
+
+    return jsonify({"msg": "OTP send successfully."}), 200
+    
+
+
+
 
 @auth_bp.post("/refresh")
 @jwt_required(refresh=True)
