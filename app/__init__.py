@@ -33,6 +33,7 @@ def create_app(class_config: type[Config] = Config):
     from app.models.permission import Permission
     from app.models.role import Role
     from app.models.token_blocklist import TokenBlocklist
+    from app.models.email_otp import EmailOTP
 
     with app.app_context():
         from app.models.token_blocklist import cleanup_expired_tokens

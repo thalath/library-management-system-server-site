@@ -3,9 +3,11 @@ from app.models.permission import Permission
 from app.models.role import Role
 from app.models.token_blocklist import TokenBlocklist
 from app.models.associations import user_roles, role_permissions
+from app.models.email_otp import EmailOTP
 
 __all__ = [
         "User", "Permission", "Role",
         "TokenBlocklist",
-        "user_roles", "role_permissions"
+        "user_roles", "role_permissions",
+        "EmailOTP"
 ]

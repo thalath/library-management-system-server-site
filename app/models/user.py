@@ -16,6 +16,12 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
 
+    is_verified = db.Column(
+        db.Boolean, 
+        default=False,
+        nullable=False,
+    )
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -67,7 +73,7 @@ class User(db.Model):
         }
 
     def has_permissiosn_codes(self, permission_codes: str) -> bool:
-        return permission_code in self.get_permission_codes()
+        return permission_codes in self.get_permission_codes()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,7 +82,7 @@ class User(db.Model):
             "is_active": self.is_active,
             "full_name": self.full_name,
             "email": self.email,
-            "role": [role.to_dict() for role in self.roles],
+            "roles": [role.to_dict() for role in self.roles],
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
