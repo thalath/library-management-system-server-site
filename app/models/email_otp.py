@@ -7,6 +7,7 @@ class EmailOTP(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     otp_hash = db.Column(db.String(64), nullable=False)
+    purpose = db.Column(db.String(30), nullable=False)
     expired_at = db.Column(db.DateTime, nullable=False)
     attempts = db.Column(db.Integer, default=0, nullable=False)
     is_used = db.Column(db.Boolean, default=False, nullable=False)

@@ -4,7 +4,7 @@ import smtplib
 from email.message import EmailMessage
 from flask import current_app
 
-def send_otp_email(receiver_email, otp):
+def send_otp_email(receiver_email, full_name, otp):
     sender_email = current_app.config["MAIL_USERNAME"]
     sender_password = current_app.config["MAIL_PASSWORD"]
 
@@ -15,7 +15,7 @@ def send_otp_email(receiver_email, otp):
     message["To"] = receiver_email
     message.set_content(
         f"""
-Hello,
+Hello, {full_name}!
 
 Thank you for registering with our Library Management System.
 
@@ -25,7 +25,7 @@ Your verification code is:
 
 This code expired in 5 minutes.
 
-if you did not request this code, Please ignore this emaail.
+if you did not request this code, Please ignore this email.
 
 Thank you.
 
