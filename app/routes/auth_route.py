@@ -5,20 +5,65 @@ from flask_jwt_extended import (jwt_required, create_access_token,
                                 set_refresh_cookies, unset_jwt_cookies)
 
 from app.services.user_service import UserService
-from app.services.email_service import send_otp_email
+from app.services.email_service import EmailOTPService
 from app.models.user import User
 from app.models.token_blocklist import TokenBlocklist
 from app.models.role import Role
 from extensions import db
 import re
-from app.utils import otp
-from datetime import datetime, timedelta
+from app.utils.otp import generate_otp, verify_otp_hash
+from datetime import datetime, timedelta, timezone
 from app.models.email_otp import EmailOTP
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
+@auth_bp.post("/email_verification")
+@jwt_required()
+def email_verification():
+    data = request.get_json()
+    if not data:
+        return jsonify({
+            "msg": "JSON payload is required.",
+            "error": str(data)
+        }), 400
+
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    otp = data['otp']
+    purpose = data['purpose']
+
+    errors = []
+
+    if not otp:
+        errors.append('OTP is Required.')
+
+    if not purpose:
+        errors.append('The OTP verification is must contained with Purpose.')
+
+    if errors:
+        return jsonify({
+            "msg": "Invalid or Missing JSON payload.",
+            "errors": str(errors[0])
+        }), 400
+
+    try:
+        email_otp = EmailOTPService.create_email_otp(data, user_id)
+
+        return jsonify({
+            "msg": "EmailOTP created successfully.",
+            "data": email_otp.to_dict()
+        }), 201
+
+    except Exception as e:
+
+        return jsonify({
+            "msg": "EmailOTP created Failed. Please try again later.",
+            "errors": str(e)
+        }), 500
+    
 @auth_bp.post("/login")
 def login():
     data = request.get_json()
@@ -131,21 +176,6 @@ def register():
         
         new_user = UserService.create(safe_user, password, default_role_id)
 
-        if new_user:
-            g_otp = otp.generate_otp()
-            otp_record = EmailOTP(
-                user_id = new_user.id,
-                otp_hash = otp.hash_otp(g_otp),
-                purpose = "email_verification",
-                expired_at = datetime.utcnow() + timedelta(minutes=5),
-                attempts=0,
-                is_used = False
-            )
-
-            db.session.add(otp_record)
-            db.session.commit()
-
-
         access_token = create_access_token(identity=str(new_user.id))
         refresh_token = create_refresh_token(identity=str(new_user.id))
 
@@ -153,19 +183,19 @@ def register():
             
         set_access_cookies(response, access_token)
         set_refresh_cookies(response, refresh_token)
-        email_send = send_otp_email(email, full_name, g_otp)
-        if not email_send:
-            return jsonify({
-                "msg": "Your created successfully, but we could not send OTP. Please request a new code.",
-                "email": email
-            }), 503
         
-        # return response, 201
+        otp = generate_otp()
+        EmailOTPService.send_otp_email(email, full_name, otp)
 
-        return jsonify({
-            "msg": "Regitration successfully. Please check you email for OTP.",
-            "email": email
-        }), 201
+        data = {
+            "purpose": "email_verification",
+            "expired_at": datetime.utcnow() + timedelta(minutes=5),
+            "otp": otp,
+        }
+
+        EmailOTPService.create_email_otp(data, new_user.id)
+        return response, 201
+
     except Exception as e:
         db.session.rollback()
                 
@@ -175,12 +205,149 @@ def register():
         }), 500
 
 
+@auth_bp.post("/forgot-password")
+def forgot_password():
+    data = request.get_json()
+   
+    if not data:
+        return jsonify({
+            "msg": "JSON payload is required.",
+            "status": "error"
+        }), 400
+
+    email = data.get("email", "").strip()
+    
+    if not email:
+        return jsonify({
+            "msg": "JSON payload is required."
+        }), 400
+
+    otp = generate_otp()
+
+    try:
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({
+                "msg": "Your email is incorrect. Please try again."
+            }), 400
+
+        new_otp_data = {
+            "purpose": "password_reset",
+            "otp": otp,
+            "expired_at": datetime.utcnow() + timedelta(minutes=5)
+        }
+
+        email_otp = EmailOTPService.create_email_otp(new_otp_data, user.id)
+        EmailOTPService.send_otp_email(user.email, user.full_name, otp)
+        return jsonify({
+            "msg": "Reset Password OTP has been sent please check your email verification.",
+            "status": "success",
+            "Info": email_otp.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("Cannot send OTP to Email")
+
+        return jsonify({
+            "msg": "Internal Error accured.",
+            "errors": str(e)
+        }), 500
+
+@auth_bp.post("/verify-reset-otp")
+def verifying_password():
+    data = request.get_json()
+    if not data:
+        return jsonify({
+            "msg": "JSON payload is required.",
+        }), 400
+
+    otp = data.get("otp", "").strip()
+    email = data.get("email", "").strip()
+
+    if not email or not otp:
+        return jsonify({
+            "msg": "email or otp is required"
+        }), 400
+
+    try:
+        user = User.query.filter_by(email=email).first()
+        otp_record = EmailOTP.query.filter_by(user_id=user.id, purpose="password_reset", is_used=False).order_by(EmailOTP.created_at.desc()).all()
+        
+        if otp_record:
+            if otp_record.attempts >= 5:
+                otp.record.is_used = True
+                db.session.commit()
+
+            return jsonify({
+                "msg": "Maximum attempts reached. Please request a new OTP code."
+            }), 429
+
+        current_time = datetime.utcnow()
+        if current_time > otp_record.expired_at:
+            return jsonify({
+                "msg": "OTP is expired. Please request for a new OTP"
+            }), 410 # 410 preffered for expired resources.
+
+        if not verify_otp_hash(otp, otp_record.otp_hash):
+            otp_record.attempts += 1
+            db.session.commit()
+
+
+            if otp_record.attempts >= 5:
+                otp_record.is_used = True
+                db.session.commit()
+
+                return jsonify({
+                    "msg": "Incorrect OTP.",
+                    "remaining": max(0, 5 - otp_record.attempts)
+                }), 400
+
+        otp_record.is_used = True
+        (
+            EmailOTP.query
+            .filter(
+                EmailOTP.user_id == user.id,
+                EmailOTP.purpose == "password_reset",
+                EmailOTP.is_used.is_(False),
+                EmailOTP.id != otp_record.id
+            )
+            .update(
+                {EmailOTP.is_used: True},
+                synchronize_session = False
+            )
+        )
+
+        db.session.commit()
+            
+        return jsonify({
+            "msg": "Password verification is correct, please go log in.",
+            "info": otp_record.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("OTP verification failed.")
+        return jsonify({
+        "msg": "Internal Error accured.",
+        "errors": str(e)
+    }), 500
+
+@auth_bp.post("/reset-password")
+def reset_password():
+    data = request.get_json()
+    if not data:
+        return jsonify({
+            "msg": "JSON payload is required.",
+        }), 400
+
+    
 
 
 @auth_bp.post("/verify-otp")
 @jwt_required()
 def verify_otp():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     if not data:
@@ -198,31 +365,28 @@ def verify_otp():
                 "msg": "This email is already verified.",
             }), 409
 
+        otp_id = EmailOTP.query.filter_by(user_id=user_id).first()
+        otp_record = EmailOTPService.get_email_otp_by_id(otp_id.id)
+        
+        if otp_record.attempts >= 5:
+            data = {
+                "is_used": True
+            }
 
-        otp_record = (
-            EmailOTP.query.filter_by(
-                user_id = user.id,
-                purpose="email_verification",
-                is_used = False
-            )
-        ).order_by(EmailOTP.created_at.desc()).first()
-        
-        
-        if not otp_record.attempts >= 5:
-            otp_record.is_used = True
-            db.session.commit()
+            EmailOTPService.update_email_otp(otp_record, data)
 
             return jsonify({
-                "msg": "Maximum attempts reached. Please request a new OTP."
+                "msg": "Maximum attempts reached. Please request a new OTP.",
+                "data": otp_record.to_dict()
             }), 429
 
-        if not otp.verifiy_otp_hash(otp, otp_record.otp_hash):
+        if not verify_otp_hash(otp, otp_record.otp_hash):
             otp_record.attempts += 1
+            
+            db.session.commit()
 
             if otp_record.attempts >= 5:
-                otp_record.is_used = True
-
-            db.session.commit()
+                EmailOTPService.update_email_otp(otp_record, {"is_used": True})
             
             return jsonify({
                 "msg": "Incorrect OTP.",
@@ -236,7 +400,7 @@ def verify_otp():
             .filter(
                 EmailOTP.user_id == user.id,
                 EmailOTP.purpose == "email_verification",
-                EmailOTP.is_used._is(False),
+                EmailOTP.is_used.is_(False),
                 EmailOTP.id != otp_record.id
             )
             .update(
@@ -254,12 +418,13 @@ def verify_otp():
         }), 200
 
     except Exception as e:
-        print(f"Testing1: {str(e)}")
         db.session.rollback()
         current_app.logger.exception("OTP verification failed.")
-        return jsonify({"msg": "Something went wrong. Please try again."}), 500
+        return jsonify({
+            "msg": "Something went wrong. Please try again.",
+            "error": str(e)
+        }), 500
 
-    
 @auth_bp.post("/send-otp")
 @jwt_required()
 def send_otp():
@@ -270,16 +435,13 @@ def send_otp():
         return jsonify({"error": "User not found"}), 404
 
     receiver_email, name = user.email, user.full_name
-    create_otp = otp.generate_otp()
+    create_otp = generate_otp()
 
-    success = send_otp_email(receiver_email, name, create_otp)
+    success = EmailOTPService.send_otp_email(receiver_email, name, create_otp)
     if not success:
         jsonify({"error": "Unable to send verification email. Please try again."}), 503
 
     return jsonify({"msg": "OTP send successfully."}), 200
-    
-
-
 
 
 @auth_bp.post("/refresh")

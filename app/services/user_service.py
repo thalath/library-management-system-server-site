@@ -16,16 +16,16 @@ class UserService:
     @staticmethod
     def create(data: dict, password: str, role_id: Optional[int] = None) -> User:
         user = User(
-                username=data["username"],
-                full_name=data["full_name"],
-                is_active=data.get("is_active", True),
-                email=data["email"]
+            username=data["username"],
+            full_name=data["full_name"],
+            is_active=data.get("is_active", True),
+            email=data["email"]
         )
 
         if password is not None:
             user.set_password(password)
 
-        if role_id or role_id is not None:
+        if role_id:
             role = db.session.get(Role, role_id)
             if role or role is not None:
                 user.roles = [role]
@@ -42,10 +42,10 @@ class UserService:
             if field in data:
                 setattr(user, field, data[field])
 
-        if password is not None:
+        if password:
             user.set_password(password)
 
-        if role_id or role_id is not None:
+        if role_id:
             role = db.session.get(Role, role_id)
             if role or role is not None:
                 user.roles = [role]

@@ -17,7 +17,7 @@ def hash_otp(otp):
     """
 
     secret = current_app.config["SECRET_KEY"]
-    
+
     return hmac.new(
         secret.encode("utf-8"),
         otp.encode("utf-8"),

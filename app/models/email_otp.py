@@ -1,5 +1,6 @@
 from datetime import datetime
 from extensions import db
+from typing import Dict, Any
 
 class EmailOTP(db.Model):
     __tablename__ = "email_otps"
@@ -18,3 +19,16 @@ class EmailOTP(db.Model):
         "User",
         backref="email_otps"
     )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ID": self.id,
+            "user_id": self.user_id,
+            "otp_hash": self.otp_hash,
+            "expired_at": self.expired_at,
+            "attemps": self.attempts,
+            "is_used": self.is_used
+        }
+
+    def __repr(self) -> str:
+        return f"<Email {self.otp_hash}>"
