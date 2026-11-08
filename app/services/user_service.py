@@ -15,24 +15,21 @@ class UserService:
 
     @staticmethod
     def create(data: dict, password: str, role_id: Optional[int] = None) -> User:
-        user = User(
-            username=data["username"],
-            full_name=data["full_name"],
-            is_active=data.get("is_active", True),
-            email=data["email"]
-        )
-
-        if password is not None:
-            user.set_password(password)
-
+        user = User(**data)
+        user.set_password(password)
+        
         if role_id:
             role = db.session.get(Role, role_id)
-            if role or role is not None:
-                user.roles = [role]
-
+            
+            if role is None:
+                raise ValueError("Selected role does not exist.")
+            
+            user.roles.append(role)
+            
         db.session.add(user)
         db.session.commit()
         return user
+            
 
     @staticmethod
     def update(user: User, data: dict, password: Optional[str] = None, role_id: Optional[int] = None) -> User:
@@ -47,8 +44,10 @@ class UserService:
 
         if role_id:
             role = db.session.get(Role, role_id)
-            if role or role is not None:
-                user.roles = [role]
+            if role is None:
+                raise ValueError("Selected roles does not exists.")
+            
+            user.roles.append(role)
 
         db.session.commit()
         return user

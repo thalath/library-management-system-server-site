@@ -9,7 +9,7 @@ def generate_otp():
     GENERATE A RANDOM 6-digits OTP
     """
 
-    return f"{secrets.randbelow(1000000):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 def hash_otp(otp):
     """

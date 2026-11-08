@@ -23,13 +23,13 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 def cleanup_expired_tokens():
     db.session.query(TokenBlocklist).filter(
         TokenBlocklist.type=="access",
-        TokenBlocklist.created_at < datetime.utcnow() - timedelta(minutes=20)
+        TokenBlocklist.created_at < datetime.now(timezone.utc) - timedelta(minutes=20)
     ).delete(synchronize_session=False)
 
 
     db.session.query(TokenBlocklist).filter(
         TokenBlocklist.type=="refresh",
-        TokenBlocklist.created_at < datetime.utcnow() - timedelta(days=31)
+        TokenBlocklist.created_at < datetime.now(timezone.utc) - timedelta(days=31)
     ).delete(synchronize_session=False)
 
     db.session.commit()
