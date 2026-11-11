@@ -90,8 +90,8 @@ def create():
         return jsonify({
             "message": "Invalid or missing data fields.",
             "errors": err.messages,
-            "status": 400
-        }), 400
+            "status": 422
+        }), 422
         
 
 @user_bp.put("/edit/<int:user_id>")
@@ -122,8 +122,8 @@ def edit(user_id: int):
         return jsonify({
             "message": "Invalid or missing fields",
             "errors": err.messages,
-            "status": 400
-        }), 400
+            "status": 422
+        }), 422
     
 
 @user_bp.delete("/delete/<int:user_id>")

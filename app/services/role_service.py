@@ -1,36 +1,29 @@
-from extensions import db
 from app.models.role import Role
 from app.models.permission import Permission
+from app.repositories.permission_repository import filter_permissions_by_id
+from app.repositories.role_repository import add_role, get_all_roles, get_role_by_id
 
 from typing import List, Optional
+from extensions import db
 
 class RoleService:
     @staticmethod
     def get_all() -> List[Role]:
-        return Role.query.order_by(Role.name.asc()).all()
+        return get_all_roles()
 
     @staticmethod
     def get_by_id(role_id: int) -> Optional[Role]:
-        return db.session.get(Role, role_id)
+        return get_role_by_id(role_id)
 
     @staticmethod
-    def create(data: dict, permission_ids: Optional[List[int]] = None) -> Role:
-        role = Role(
-                name=data["name"],
-                description=data["description"]
-
-            )
-        if permission_ids is not None:
-            permission = db.session.scalars(
-                    db.select(Permission).filter(
-                        Permission.id.in_(permission_ids)
-                    )
-            ).all()
-
-            role.permissions = list(permission)
-
-        db.session.add(role)
-        db.session.commit()
+    def create(data: dict, permission_ids: Optional[List[int]] = None,) -> Role:
+        role = Role(**data)
+        
+        if permission_ids:
+            permissions = filter_permissions_by_id(permission_ids)
+            
+            role.permissions = permissions
+        add_role(role)
         return role
 
     @staticmethod

@@ -1,18 +1,21 @@
-from extensions import db
 from app.models.user import User
+from extensions import db
 
-class UserRepository:
-    def __init__(self):
-        self.db = db
+def get_user_by_id(user_id: int):
+    return User.query.get(user_id)
 
-    def get_all():
-        return User.query.order_by(User.id.desc()).all()
+def get_user_by_email(email):
+    return User.query.filter_by(email=email).first()
 
-    def get_by_email(email: str):
-        return User.query.filter_by(email=email).first()
+def get_user_by_username(username):
+    return User.query.filter_by(username=username).first()
 
-    def create(self, user: User) -> User:
-        self.db.session.add(user)
-        self.db.session.commit()
 
-        return user
+def get_all_users():
+    return User.query.all()
+
+def add_user(user: User):
+    db.session.add(user)
+    db.session.commit()
+
+    return user

@@ -1,6 +1,6 @@
 from marshmallow import Schema, fields, validate, ValidationError, validates, validates_schema, pre_load
 from ..models.user import User
-
+from ..repositories.user_repository import get_user_by_email, get_user_by_id, get_user_by_username
 import re
 
 
@@ -36,9 +36,9 @@ class UserCreateSchema(Schema):
         allow_none=True
     )
     
-    is_active = fields.Boolean(
-        load_default=True
-    )
+    is_active = fields.Boolean(load_default=True)
+    
+    is_verified = fields.Boolean(load_default=False)
     
     @pre_load
     def normalize_data(self, data, **kwargs):
@@ -87,7 +87,7 @@ class UserCreateSchema(Schema):
     @validates("username")
     def validate_username(self, value, **kwargs):
         
-        existing_username = User.query.filter_by(username=value).first()
+        existing_username = get_user_by_username(value)
         
         if existing_username:
             raise ValidationError("Username is already taken.")
@@ -97,7 +97,7 @@ class UserCreateSchema(Schema):
         if not re.search(r"[\w\.-]+@[\w\.-]+\.\w+]", value):
             raise ValidationError("Invalid email format.")
         
-        existing_email = User.query.filter_by(email=value).first()
+        existing_email = get_user_by_email(value)
         if existing_email:
             raise ValidationError("Email is already registered.")
     
@@ -111,8 +111,9 @@ class UserUpdateSchema(Schema):
     full_name = fields.String(validate=validate.Length(min=2, max=80))
     
     email = fields.Email(validate=validate.Length(max=120))
-    
+
     is_active = fields.Boolean(allow_none=True)
+    is_verified = fields.Boolean(allow_none=True)
     
     @validates("username")
     def validate_username(self, value, **kwargs):
@@ -136,7 +137,7 @@ class UserUpdateSchema(Schema):
 
         if existing_user:
             raise ValidationError("Email already exists.")
-        
+
 class UserResponseSchema(Schema):
     
     id = fields.Integer(dump_only=True)
@@ -152,4 +153,4 @@ class UserResponseSchema(Schema):
 
     
     def get_roles(self, obj):
-        return [role.name for role in obj.roles]
+        return [role.name for role in obj.roles]    

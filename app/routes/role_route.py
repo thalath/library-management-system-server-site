@@ -1,222 +1,167 @@
 from flask import Blueprint, jsonify, request
-from app.services.role_service import RoleService
 from flask_jwt_extended import jwt_required
+from marshmallow import ValidationError
 
-from middleware.permission_extended import permission_required
-
-from app.models.role import Role
-from app.models.permission import Permission
 from extensions import db
+from middleware.permission_extended import permission_required
+from app.schemas.role_schemas import RoleResponseSchema, RoleCreateSchema, RoleUpdateSchema
+from app.services.role_service import RoleService
+from app.repositories.permission_repository import filter_permissions_by_id
+from app.repositories.role_repository import get_role_by_id
 
 role_bp = Blueprint("roles", __name__, url_prefix="/roles")
+
 
 @role_bp.get("/")
 @jwt_required()
 @permission_required("role.view")
 def index():
-    roles = RoleService.get_all()
-    if not roles or roles is None:
-        return jsonify({
-            "msg": "Roles not found.",
-            "status": 404
-        }), 404
+    try:
+        roles = RoleService.get_all()
+        response = RoleResponseSchema(many=True)
 
-    if roles or roles is not None:
+        if not roles:
+            return jsonify({
+                "message": "Roles not found.",
+                "status": 404
+            }), 404
+            
         return jsonify({
-            "msg": "Roles retrivced successfully.",
-            "status": 200,
-            "data": [role.to_dict() for role in roles]
+            "message": "Role retrived, successfully.",
+            "Role": response.dump(roles),
         }), 200
-
-    return jsonify({
-        "msg": "Internal Backend Error occured",
-        "status": 500
+    
+    except ValidationError as v_e:
+        return jsonify({
+            "mssage": "Invalid or missing fields",
+            "errors": v_e.messages
+        }), 422
+        
+    except Exception as e:
+        return jsonify({
+            "message": "retrives errors, Please try again later.",
+            "errors": e
         }), 500
 
 @role_bp.get("detail/<int:role_id>")
 @jwt_required()
 @permission_required("role.detail")
 def detail(role_id: int):
-    role = RoleService.get_by_id(role_id)
-    if not role or role is None:
-        return jsonify({
-            "msg": f"Role with ID: {role_id} was not found.",
-            "status": 404
-        }), 404
+    try:
+        role_response_schema = RoleResponseSchema()
+        role = RoleService.get_by_id(role_id)
 
-    if role or role is not None:
+        if not role:
+            return jsonify({
+                "message": f"Role with ID {role_id} was not found",
+                "status": 404
+            }), 404
+        return jsonify(role_response_schema.dump(role)), 200
+    
+    except ValidationError as v_e:
         return jsonify({
-            "msg": "Role retrived successfully.",
-            "status": 200,
-            "data": role.to_dict()
-        }), 200
-    return jsonify({
-        "msg": "Internal Backend error occured.",
-        "status": 500
-    }), 500
+            "message": "Invalid or missing fields",
+            "errors": v_e.messages
+        }), 422
+    except Exception as e:
+        return jsonify({
+            "message": "retrived error, Please check the errors and try again.",
+            "errors": e
+        }), 500
 
 @role_bp.post("/create")
 @jwt_required()
 @permission_required("role.create")
 def create():
-    data = request.get_json()
-    if not data or data is None:
-        return jsonify({
-            "msg": "Body request is required.",
-            "status": 400
-        }), 400
-
-    if data or data is not None:
-        name = data.get("name", "").strip()
-        description = data.get("description") or "_"
-        permission_ids = data.get("permission_ids") or []
-
-        errors: dict[str, list[str]] = {}
-        if not name:
-            errors.setdefault("name", []).append("Role name is required.")
-        elif len(name) > 50:
-            errors.setdefault("name", []).append("Role name cannot execced 50 characters.")
-
-        if len(description) > 249:
-            errors.setdefault("description", []).append("Role description cannot execced 250 characters.")
-
-        existed_perm = Permission.query.filter_by(code="user.view").first()
-        default_perm_ids = permission_ids if permission_ids else [existed_perm.id]
-
-        if permission_ids:
-            existed_ids = set(db.session.scalars(db.select(Permission.id)))
-            invalid_ids = set(permission_ids) - existed_ids
-            if invalid_ids:
-                errors.setdefault("permission_ids", []).append(
-                        f"The flollowing permission IDs do not exist: {sorted(list(invalid_ids))}")
-            elif permission_ids and not isinstance(permission_ids, list):
-                errors.setdefault("Permission ids", []).append("Permission must be a list.")
+    try:
+        schema = RoleCreateSchema()
+        response_schema = RoleResponseSchema()
+        data = schema.load(
+            request.get_json(silent=True) or {}
+        )
         
-        if not errors:
-            existed_name = Role.query.filter_by(name=name).first()
-            if existed_name:
-                errors.setdefault("role_id", []).append("Role name is already taken.")
-            
- 
-        if errors:
-            return jsonify({
-                "msg": "Invalid Role Field.",
-                "error": errors,
-                "status": 400
-            }), 400
-
-        try:
-            
-            safe_role_data = {
-                    "name": name,
-                    "description": description
-            }
-
-
-            role = RoleService.create(safe_role_data, default_perm_ids)
-
-            return jsonify({
-                "msg": "Role created successfully.",
-                "status": 201,
-                "data": role.to_dict()
-            }), 201
-        except Exception as e:
-            print("BACKEND ERROR OCCURED", e)
-            raise e
-
-    return jsonify({
-        "msg": "An internal backend error occured.",
-        "status": 500
-    }), 500
+        permission_ids = data.pop("permission_ids")
+        if permission_ids:
+            permissions = filter_permissions_by_id(permission_ids)
+            if len(permissions) != len(set(permission_ids)):
+                return jsonify({
+                    "message": "Some permissions do not exist."
+                }), 422
+    
+        role = RoleService.create(data, permission_ids)
+        
+        return jsonify(response_schema.dump(role)), 201
+    
+    except ValidationError as v_e:
+        return jsonify({
+            "message": "Invalide or missing fields.",
+            "errors": v_e.messages
+        }), 422
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Role errors, Please check the errors and try again.",
+            "errors": e
+        })
+    
 
 @role_bp.put("/edit/<int:role_id>")
 @jwt_required()
 @permission_required("role.edit")
 def edit(role_id: int):
-    role = RoleService.get_by_id(role_id)
-    if not role or role is None:
-        return jsonify({
-            "msg": f"Role with ID: {role_id} was not found",
-            "status": 404
-        }), 404
-    data = request.get_json()
-    if not data or data is None:
-        return jsonify({
-            "msg": "Body request is required.",
-            "status": 400
-        }), 400
-
-    if data or data is not None:
-        name = data.get("name", role.name)
-        description = data.get("description", role.description)
-        permission_ids = data.get("permission_ids", [perm.id for perm in role.permissions])        
-        errors: list[str] = []
-        if not name:
-            errors.append("Role name is required.")
-
-        if permission_ids:
-            if not isinstance(permission_ids, list):
-                errors.append("Permission ids, must be list values.")
-            
-            exist_perm_ids = set(db.session.scalars(db.select(Permission.id)))
-            if not all(ep in exist_perm_ids for ep in permission_ids): # check if permission is not in permissions table
-                errors.append("Permission is not exist.")
-                
-
-        if not errors:
-            exists_roles = db.session.scalars(db.select(Role).order_by(Role.name)).all()
-            if any(name.lower() == r.name.lower() for r in exists_roles if r.id != role.id): # check if role name is exist and not same as default
-                errors.append("Role name is already taken.")
-
-        if errors:
-            return jsonify({
-                "msg": "Invalid or Missing Field.",
-                "status": 400,
-                "error": [error for error in errors],
-            }), 400
-
+    try:
         
-        safe_role_data = {
-            "name": name,
-            "description": description
-        }
-
-        try:
-            new_role = RoleService.update(role, safe_role_data, permission_ids)
-            return jsonify({
-                "msg": "Role updated successfully.",
-                "status": 200,
-                "data": new_role.to_dict()
-            }), 200
-        except Exception as e:
-            print("BACKEND ERROR ERROR.", e)
-
-    return jsonify({
-        "msg": "An internal backend error occured.",
-        "status": 500
-    }), 500
+        role = get_role_by_id(role_id)
+        response = RoleResponseSchema()
+        
+        schema = RoleUpdateSchema()
+        data = schema.load(
+            request.get_json(silent=True) or {}
+        )
+        
+        permission_ids = data.pop("permission_ids")
+        
+        updated_role = RoleService.update(role, data, permission_ids)
+        
+        return jsonify({
+            "message": "Role updated successfully.",
+            "Role": response.dump(updated_role)
+        }), 200
+        
+    except ValidationError as v_e:
+        return jsonify({
+            "message": "Invalid or missing fileds, Please check error and try again later.",
+            "error": v_e.messages
+        }), 422
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Exception Errors, please check and try again later.",
+            "errors": e
+        }), 500
+        
 
 @role_bp.delete("/delete/<int:role_id>")
 @jwt_required()
 @permission_required("role.delete")
 def delete(role_id: int):
-    role = RoleService.get_by_id(role_id)
-    if not role or role is None:
-        return jsonify({
-            "msg": f"Role with ID: {role_id} was not found.",
-            "status": 404
-        }), 404
-
-    if role and role is not None:
+    try:
+        role = get_role_by_id(role_id)
+        if not role:
+            return jsonify({
+                "message": f"Role with ID: {role_id} was not exist.",
+                "status": 404
+            }), 404
+            
         RoleService.delete(role)
         return jsonify({
-            "msg": "Role deleted successfully.",
-            "status": 200
+            "message": "Role deleted successfully.",
+            "success": True
         }), 200
-
-    return jsonify({
-        "msg": "An internal backend error occured.",
-        "status": 500
-    }), 500
-
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Exception Error, Please check & try again later.",
+            "success": False
+        }), 500
 
