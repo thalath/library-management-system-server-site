@@ -153,9 +153,10 @@ def delete(role_id: int):
             "success": True
         }), 200
         
-    except Exception:
+    except Exception as e:
         return jsonify({
             "message": "Exception Error, Please check & try again later.",
-            "success": False
+            "success": False,
+            "errors": str(e)
         }), 500
 
