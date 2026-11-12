@@ -99,8 +99,6 @@ class UserCreateSchema(Schema):
         
     @validates("email")
     def validate_email(self, value, **kwargs):
-        if not re.search(r"[\w\.-]+@[\w\.-]+\.\w+]", value):
-            raise ValidationError("Invalid email format.")
         
         existing_email = filter_user_by_email(value)
         if existing_email:

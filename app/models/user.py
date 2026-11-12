@@ -13,7 +13,7 @@ class User(db.Model):
     username = db.Column(db.String(60), unique=True, nullable=False)
     full_name = db.Column(db.String(80), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, index=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
 
     is_verified = db.Column(

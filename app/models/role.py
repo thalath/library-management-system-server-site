@@ -19,16 +19,5 @@ class Role(db.Model):
     def has_permission(self, permission_code: str) -> bool:
         return any(p.code == permission_code for p in self.permissions)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "Description": self.description,
-            "created_at": self.created_at,
-            "users": [{"username": user.username, "email": user.email} for user in self.users],
-            "permissions": [perm.code for perm in self.permissions]
-        }
-    
-
     def __repr__(self) -> str:
         return f"{self.id}"

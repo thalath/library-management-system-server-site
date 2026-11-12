@@ -1,5 +1,4 @@
 from app.models.role import Role
-from app.models.permission import Permission
 from app.repositories.permission_repository import filter_permissions_by_id
 from app.repositories.role_repository import add_role, get_all_roles, get_role_by_id
 

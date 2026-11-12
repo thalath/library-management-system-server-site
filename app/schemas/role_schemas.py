@@ -1,6 +1,7 @@
-from marshmallow import Schema, validate, fields, validates, ValidationError
-from ..repositories.role_repository import get_role_by_name
+from marshmallow import Schema, validate, fields, validates, ValidationError, pre_load
 from ..repositories.permission_repository import filter_permissions_by_id
+from ..models.role import Role
+from sqlalchemy import func
 
 class RoleCreateSchema(Schema):
     
@@ -19,17 +20,20 @@ class RoleCreateSchema(Schema):
         validate=validate.Length(min=1)
     )
 
-
     @validates("name")
     def validate_name(self, value, **kwargs):
         
-        existing_name = get_role_by_name(value)
+        existing_name = Role.query.filter_by(name=value).first()
 
         if existing_name:
             raise ValidationError("The name already exists.")
 
 
 class RoleUpdateSchema(Schema):
+    
+    def __init__(self, role_id=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.role_id = role_id
     
     name = fields.String(
         required=False,
@@ -49,6 +53,17 @@ class RoleUpdateSchema(Schema):
         allow_none=True,
     )
     
+    @pre_load
+    def normalize_data(self, data, **kwargs):
+        if not isinstance(data, dict):
+            return
+        data = data.copy()
+
+        if isinstance(data.get("name"), str):
+            data['name'] = data['name'].strip()
+        
+        return data
+    
     @validates("permission_ids")
     def validate_permissions(self, value, **kwargs):
         
@@ -67,7 +82,15 @@ class RoleUpdateSchema(Schema):
     @validates("name")
     def validate_name(self, value, **kwargs):
         
-        exist_name = get_role_by_name(value)
+        if value is None:
+            return
+        
+        value = value.strip()
+        
+        exist_name = Role.query.filter(
+            func.lower(Role.name) == value.lower(),
+            Role.id != self.role_id
+        ).first()
 
         if exist_name:
             raise ValidationError("The name already exists.")

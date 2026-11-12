@@ -13,7 +13,6 @@ class UserService:
     def get_by_id(user_id: int) -> Optional[User]:
         return get_user_by_id(user_id)
 
-
     @staticmethod
     def create(data: dict, password: str, role_id: Optional[int] = None) -> User:
         user = User(**data)
