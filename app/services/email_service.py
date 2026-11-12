@@ -1,12 +1,12 @@
 import os
 import smtplib
-
 from email.message import EmailMessage
-from flask import current_app
 from typing import List, Optional
 
-from app.utils import otp
+from flask import current_app
+
 from extensions import db
+from app.utils.otp import hash_otp
 from app.models.user import User
 from app.models.email_otp import EmailOTP
 from datetime import datetime, timedelta
@@ -22,15 +22,17 @@ class EmailOTPService:
         return db.session.get(EmailOTP, otp_id)
     
     @staticmethod
-    def create_email_otp(data: dict, user_id: Optional[int] = None) -> EmailOTP:
+    def create_email_otp(data: dict, user_id: Optional[int] = None, otp: Optional[str] = None) -> EmailOTP:
         email_otp = EmailOTP(
-            otp_hash = otp.hash_otp(data['otp']),
             expired_at = data.get('expired_at', datetime.utcnow() + timedelta(minutes=5)),
             is_used = data.get('is_used', False),
             attempts = data.get('attemps', 0),
             purpose = data['purpose']
         )
 
+        if otp:
+            email_otp.otp_hash = hash_otp(otp)
+        
         if user_id:
             user = db.session.get(User, user_id)
             if user:

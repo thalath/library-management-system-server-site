@@ -20,15 +20,5 @@ class EmailOTP(db.Model):
         backref="email_otps"
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "ID": self.id,
-            "user_id": self.user_id,
-            "otp_hash": self.otp_hash,
-            "expired_at": self.expired_at,
-            "attemps": self.attempts,
-            "is_used": self.is_used
-        }
-
-    def __repr(self) -> str:
+    def __repr__(self) -> str:
         return f"<Email {self.otp_hash}>"

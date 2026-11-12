@@ -1,5 +1,5 @@
-from marshmallow import fields, validate, validates_schema, ValidationError, Schema
 import re
+from marshmallow import fields, validate, validates_schema, ValidationError, Schema
 
 # ========= Strong password helper ================
 def strong_password(value):

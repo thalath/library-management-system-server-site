@@ -1,12 +1,11 @@
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
+from marshmallow import ValidationError
 from flask_jwt_extended import (jwt_required, create_access_token, 
                                 create_refresh_token, get_jwt_identity,
                                 decode_token, get_jwt, set_access_cookies,
                                 set_refresh_cookies, unset_jwt_cookies)
-from marshmallow import ValidationError
 
 from extensions import db
 from app.services.user_service import UserService
@@ -18,6 +17,7 @@ from app.models.token_blocklist import TokenBlocklist
 from app.schemas.auth_schema import LoginSchema
 from app.repositories.user_repository import filter_user_by_email
 from app.utils.otp import generate_otp, verify_otp_hash
+from app.schemas.user_schema import UserCreateSchema
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -26,45 +26,90 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 @auth_bp.post("/email_verification")
 @jwt_required()
 def email_verification():
+    
     data = request.get_json()
-    if not data:
-        return jsonify({
-            "msg": "JSON payload is required.",
-            "error": str(data)
-        }), 400
-
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-
-    otp = data['otp']
-    purpose = data['purpose']
-
-    errors = []
-
-    if not otp:
-        errors.append('OTP is Required.')
-
-    if not purpose:
-        errors.append('The OTP verification is must contained with Purpose.')
-
-    if errors:
-        return jsonify({
-            "msg": "Invalid or Missing JSON payload.",
-            "errors": str(errors[0])
-        }), 400
+    claim = get_jwt()
+    
+    print("JWT CLAIMS:", claim)
+    print("PURPOSE:", repr(claim.get("purpose")))
 
     try:
-        email_otp = EmailOTPService.create_email_otp(data, user_id)
+        if claim.get("purpose") != "email_verification":
+            return jsonify({
+                "message": "Invalid verification"
+            }), 403
+            
+        otp = data.get("otp")
+        user_id = int(get_jwt_identity())
+        
+        user = UserService.get_by_id(user_id)
+        print(user.id)
 
+        if not user:
+            return jsonify({
+                "message": "User not found",
+                "status": 404
+            }), 404
+            
+        if user.is_verified:
+            return jsonify({
+                "message": "Email already verified,",
+                "status": 403
+            }), 403
+        
+        otp_record = EmailOTP.query.filter_by(
+            user_id=user_id,
+            purpose="email_verification",
+            is_used=False
+        ).order_by(
+            EmailOTP.created_at.desc()
+        ).first()
+        
+        if not otp_record:
+            return jsonify({
+                "message": "Verification OTP not found.",
+                "status": 404
+            }), 404
+            
+        if datetime.utcnow() > otp_record.expired_at:
+            return jsonify({
+                "message": "OTP has expired."
+            }), 400
+            
+        if not verify_otp_hash(otp, otp_record.otp_hash):
+            otp_record.attempts += 1
+            db.session.commit()
+            return jsonify({
+                "message": "OTP incorrect.",
+                "remainning": max(0, 5 - otp_record.attempts)
+            }), 400
+            
+        otp_record.is_used = True
+        user.is_verified = True
+        
+        db.session.commit()
+        
+        access_token = create_access_token(identity=str(user_id))
+        refresh_token = create_refresh_token(identity=str(user_id))
+        
+        response = jsonify({"Email verified successfully."})
+        
+        set_access_cookies(response, access_token)
+        set_refresh_cookies(response, refresh_token)       
+
+        return response, 200
+    
+    except ValidationError as err:
         return jsonify({
-            "msg": "EmailOTP created successfully.",
-            "data": email_otp.to_dict()
-        }), 201
-
+            "message": "Ivalid or missing fileds.",
+            "errors": err.messages
+        }), 422
+            
     except Exception as e:
+        db.session.rollback()
 
         return jsonify({
-            "msg": "EmailOTP created Failed. Please try again later.",
+            "msg": "email verification failed. Please try again later.",
             "errors": str(e)
         }), 500
     
@@ -119,99 +164,57 @@ def login():
 
 @auth_bp.post("/register")
 def register():
-    data = request.get_json()
-    if not data:
-        return jsonify({
-            "msg": "Invalid or Missing JSON payload",
-            "status": 400
-        }), 400
-
-    username = data.get("username", "").strip()
-    full_name = data.get("full_name", "").strip()
-    email = data.get("email", "").strip()
-    password = data.get("password", "").strip()
-    confirmation_password = data.get("confirmation_password", "").strip()
-
-    errors: list[str] = []
-
-    if not username:
-        errors.append("Username is required.")
-    if not full_name:
-        errors.append("Full Name is required.")
-
-    if not email:
-        errors.append("Email is required.")
-    if not password:
-        errors.append("Strong password is required.")
-
-    if password:
-        if len(password) < 8:
-            errors.append("Password must be contained at least 8 characters.")
-        if not re.search(r"[a-z]", password):
-            errors.append("Password must contained at least one lowercase character.")
-        if not re.search(r"[A-Z]", password):
-            errors.append("Password must contained at least one uppercase character.")
-        if not re.search(r"[0-9]", password):
-            errors.append("Password must contained at least one digit number")
-        if not re.search(r"[!@#$%^&*()_+=-~`{}|:';,./?><]", password):
-            errors.append("Password must contained at least one special character.")
-        if password != confirmation_password:
-            errors.append("Confirm Password must matched.")
-
-    email_pattern = r"[\w\.-]+@[\w\.-]+\.\w+"
-    if email and not re.match(email_pattern, email):
-        errors.append("Invalid Email format.")
-
-    if username:
-        exists_username = User.query.filter_by(username=username).first()
-        if exists_username:
-            errors.append("Username is already taken")
-
-
-    if email:
-        exists_email = User.query.filter_by(email=email).first()
-        if exists_email:
-            errors.append("Email is already registered.")
-
-    if errors:
-        return jsonify({
-            "msg": "Invalid or Missing Fields.",
-            "errors": errors,
-            "status": 400
-        }), 400
 
     try:
-        safe_user = {
-            "username": username,
-            "full_name": full_name,
-            "email": email,
-            "is_active": data.get("is_active", True)
-        }
+        schema = UserCreateSchema()
+        
+        data = schema.load(
+            request.get_json(silent=True) or {}
+        )
+        
+        password = data.pop("password", None)
+        data.pop("confirmation_password", None)
+        data.pop("role_id", None)
+        
+        email = data.get("email")
+        full_name = data.get("full_name")
 
         default_role = Role.query.filter_by(name="User").first()
         default_role_id = default_role.id if default_role else None
         
-        new_user = UserService.create(safe_user, password, default_role_id)
-
-        access_token = create_access_token(identity=str(new_user.id))
-        refresh_token = create_refresh_token(identity=str(new_user.id))
-
-        response = jsonify({"msg": "Registered successfully"})
-            
-        set_access_cookies(response, access_token)
-        set_refresh_cookies(response, refresh_token)
+        user = UserService.create(data, password, default_role_id)
         
         otp = generate_otp()
         EmailOTPService.send_otp_email(email, full_name, otp)
 
         data = {
             "purpose": "email_verification",
-            "expired_at": datetime.utcnow() + timedelta(minutes=5),
-            "otp": otp,
+            "expired_at": datetime.utcnow() + timedelta(minutes=5)
         }
 
-        EmailOTPService.create_email_otp(data, new_user.id)
+        EmailOTPService.create_email_otp(data, user.id, otp)
+        
+        verification_token = create_access_token(
+            identity=str(user.id),
+            additional_claims={
+                "purpose": "email_verification"
+            },
+            expires_delta=timedelta(minutes=100)
+        )
+        
+        response = jsonify({
+            "message": "Registered successfully, Please ",
+            "status": 201
+        })
+        
+        set_access_cookies(response, verification_token)
         return response, 201
+    
+    except ValidationError as err:
+        return jsonify({
+            "message": "Invalid or missing fields.",
+            "errors": err.messages
+        }), 422
 
     except Exception as e:
         db.session.rollback()
@@ -357,8 +360,6 @@ def reset_password():
         return jsonify({
             "msg": "JSON payload is required.",
         }), 400
-
-    
 
 
 @auth_bp.post("/verify-otp")
