@@ -6,8 +6,8 @@ import re
 
 
 # ============== password helpers ====================
-def strong_password(data, field):
-    password = field.data or ""
+def strong_password(value):
+    password = value or ""
     
     if len(password) < 8:
         raise ValidationError("Password must contain at least 8 characters.")
@@ -44,7 +44,10 @@ class UserCreateSchema(Schema):
     password = fields.String(
         required=True,
         load_only=True,
-        validate=[strong_password]
+        validate=[
+            validate.Length(min=8),
+            strong_password
+        ]
     )
     
     confirmation_password = fields.String(
@@ -75,7 +78,7 @@ class UserCreateSchema(Schema):
             data["email"] = data["email"].strip().lower()
 
         if isinstance(data.get("full_name"), str):
-            data["full_name"] = data['full_name'].strip().lower()
+            data["full_name"] = data['full_name'].strip()
 
         return data
     
