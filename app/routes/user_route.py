@@ -28,7 +28,8 @@ def index():
     except Exception as e:
         return jsonify({
             "message": "Exception errors, Please try again.",
-            "status": 500
+            "status": 500,
+            "errors": str(e)
         }), 500
 
 
@@ -48,12 +49,13 @@ def detail(user_id: int):
                 "status": 404
             }), 404
             
-        return jsonify({response.dump(user)}), 200
+        return jsonify(response.dump(user)), 200
         
     except Exception as e:
         return jsonify({
             "message": "Exception errors, Please check and try again.",
-            "status": 500
+            "status": 500,
+            "errors": str(e)
         }), 500
 
 @user_bp.post("/create")
@@ -61,6 +63,7 @@ def detail(user_id: int):
 @permission_required("user.create")
 def create():
     user_create_schema = UserCreateSchema()
+    response = UserResponseSchema()
     try:
         data = user_create_schema.load(
             request.get_json(silent=True) or {}
@@ -69,11 +72,13 @@ def create():
         password = data.pop("password")
         role_id = data.pop("role_id", None)
         
+        data.pop("confirmation_password", None)
+        
         user = UserService.create(data, password, role_id)
         
         return jsonify({
             "message": "User created successfully.",
-            "data": user_create_schema.dump(user),
+            "data": response.dump(user),
             "status": 201
         }), 201
         
@@ -107,7 +112,7 @@ def edit(user_id: int):
         )
         
         password = data.pop("password", None)
-        role_id = data.pop("role_id", None)
+        role_id = data.get("role_id", None)
         data.pop("is_active", None)
         
         new_user = UserService.update(user, data, password, role_id)
