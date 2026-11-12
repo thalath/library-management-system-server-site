@@ -11,6 +11,9 @@ def filter_permissions_by_id(permission_ids):
     return Permission.query.filter(
         Permission.id.in_(permission_ids)
     ).all()
+    
+def filter_permissions_by_name(name):
+    return Permission.query.filter_by(name=name).first()
 
 def add_permission(perm: Permission):
     db.session.add(perm)

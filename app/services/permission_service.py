@@ -1,28 +1,23 @@
 from extensions import db
 from app.models.permission import Permission
 from typing import List, Optional
+from app.repositories.permission_repository import add_permission, get_all_permissions, get_permission_by_id
 
 class PermissionService:
 
     @staticmethod
     def get_all() -> List[Permission]:
-        return Permission.query.order_by(Permission.code.desc()).all()
+        return get_all_permissions()
 
     @staticmethod
     def get_by_id(perm_id: int) -> Optional[Permission]:
-        return db.session.get(Permission, perm_id)
+        return get_permission_by_id(perm_id)
 
     @staticmethod
     def create(data: dict) -> Permission:
-        perm = Permission(
-                code=data["code"],
-                name=data["name"],
-                module=data.get("module", "General"),
-                description=data.get("description")
-            )
-
-        db.session.add(perm)
-        db.session.commit()
+        
+        perm = Permission(**data)
+        add_permission(perm)
         return perm
 
     @staticmethod

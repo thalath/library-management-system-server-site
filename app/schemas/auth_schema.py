@@ -2,8 +2,8 @@ from marshmallow import fields, validate, validates_schema, ValidationError, Sch
 import re
 
 # ========= Strong password helper ================
-def strong_password(data, field):
-    password = field.data or ""
+def strong_password(value):
+    password = value or ""
     
     if len(password) < 8:
         raise ValidationError("Password must contain at least 8 characters.")
