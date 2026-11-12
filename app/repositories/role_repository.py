@@ -7,7 +7,7 @@ def get_role_by_id(role_id: int):
 def get_all_roles():
     return Role.query.all()
 
-def get_role_by_name(name):
+def filter_role_by_name(name):
     return Role.query.filter_by(name=name).first()
 
 def add_role(role: Role):
