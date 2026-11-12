@@ -1,7 +1,28 @@
 from marshmallow import Schema, fields, validate, ValidationError, validates, validates_schema, pre_load
 from ..models.user import User
-from ..repositories.user_repository import get_user_by_email, get_user_by_id, get_user_by_username
+from ..repositories.user_repository import filter_user_by_email, filter_user_by_username
+from ..repositories.role_repository import get_role_by_id
 import re
+
+
+# ============== password helpers ====================
+def strong_password(data, field):
+    password = field.data or ""
+    
+    if len(password) < 8:
+        raise ValidationError("Password must contain at least 8 characters.")
+    
+    if not re.search(r"[a-z]", password):
+        raise ValidationError("Password must contain at least one lowercase character.")
+    
+    if not re.search(r"[A-Z]", password):
+        raise ValidationError("Password must contain at least one uppercase character.")
+    
+    if not re.search(r"[0-9]", password):
+        raise ValidationError("Password must contain at least one digit.")
+    
+    if not re.search(r"[^A-Za-z0-9\s]", password):
+        raise ValidationError("Password must contain at least one special character.")
 
 
 class UserCreateSchema(Schema):
@@ -23,7 +44,7 @@ class UserCreateSchema(Schema):
     password = fields.String(
         required=True,
         load_only=True,
-        validate=validate.Length(min=8),
+        validate=[strong_password]
     )
     
     confirmation_password = fields.String(
@@ -58,22 +79,6 @@ class UserCreateSchema(Schema):
 
         return data
     
-    @validates("password")
-    def validate_password(self, value, **kwargs):
-        if len(value) < 8:
-            raise ValidationError("Passowrd mus contain at least 8 characters.")
-        
-        if not re.search(r"[a-z]", value):
-            raise ValidationError("Password must contain at least one lowercause character.")
-        
-        if not re.search(r"[A-Z]", value):
-            raise ValidationError("Password must contain at least one uppercase character.")
-        
-        if not re.search(r"[0-9]", value):
-            raise ValidationError("Password must contain at least one digit.")
-        
-        if not re.search(r"[^A-Za-z0-9\s]", value):
-            raise ValidationError("Password must contain at least one special character.")
     
     @validates_schema
     def validate_confirmation_password(self,  data, **kwargs):
@@ -87,7 +92,7 @@ class UserCreateSchema(Schema):
     @validates("username")
     def validate_username(self, value, **kwargs):
         
-        existing_username = get_user_by_username(value)
+        existing_username = filter_user_by_username(value)
         
         if existing_username:
             raise ValidationError("Username is already taken.")
@@ -97,23 +102,48 @@ class UserCreateSchema(Schema):
         if not re.search(r"[\w\.-]+@[\w\.-]+\.\w+]", value):
             raise ValidationError("Invalid email format.")
         
-        existing_email = get_user_by_email(value)
+        existing_email = filter_user_by_email(value)
         if existing_email:
             raise ValidationError("Email is already registered.")
     
 class UserUpdateSchema(Schema):
     
-    def __init__(self, user_id=None, **kwargs):
+    def __init__(self, user_id=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.user_id = user_id
     
-    username = fields.String(validate=validate.Length(min=3, max=60))
+    username = fields.String(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(min=3, max=60),
+    )
     
-    full_name = fields.String(validate=validate.Length(min=2, max=80))
+    full_name = fields.String(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(min=2, max=80),
+        
+    )
     
-    email = fields.Email(validate=validate.Length(max=120))
+    email = fields.Email(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=120)
+    )
+    
+    role_id = fields.Integer(
+        required=False,
+        allow_none=True
+    )
 
-    is_active = fields.Boolean(allow_none=True)
-    is_verified = fields.Boolean(allow_none=True)
+    is_active = fields.Boolean(
+        required=False,
+        allow_none=True,
+    )
+    is_verified = fields.Boolean(
+        required=False,
+        allow_none=True
+    )
     
     @validates("username")
     def validate_username(self, value, **kwargs):
@@ -127,8 +157,6 @@ class UserUpdateSchema(Schema):
         
     @validates("email")
     def validate_email(self, value, **kwargs):
-        if not re.search(r"[\w\.-]+@[\w\.-]+\.\w+]", value):
-            raise ValidationError("Invalid Email format.")
         
         existing_user = User.query.filter(
             User.email == value,
@@ -137,6 +165,17 @@ class UserUpdateSchema(Schema):
 
         if existing_user:
             raise ValidationError("Email already exists.")
+        
+    @validates("role_id")
+    def validate_role_id(self, value, **kwargs):
+        
+        if value is None:
+            return
+        
+        role = get_role_by_id(value)
+
+        if not role:
+            raise ValidationError("Selected role does not exist.")
 
 class UserResponseSchema(Schema):
     
@@ -150,6 +189,8 @@ class UserResponseSchema(Schema):
 
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
+    
+    roles = fields.Method("get_roles", dump_only=True)
 
     
     def get_roles(self, obj):

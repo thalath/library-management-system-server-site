@@ -22,12 +22,19 @@ def strong_password(data, field):
     
 class LoginSchema(Schema):
     email = fields.Email(
-        required=True
+        required=True,
+        error_messages = {
+            "required": "Email is required."
+        }
     )
     
     password = fields.String(
         required = True,
-        load_only=True
+        load_only=True,
+        validate=validate.Length(min=8),
+        error_messages={
+            "required": "Password is required."
+        }
     )
     
 class UpdatePasswordSchema(Schema):

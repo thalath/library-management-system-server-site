@@ -28,17 +28,16 @@ class RoleService:
 
     @staticmethod
     def update(role: Role, data: dict, permission_ids: Optional[List[int]] = None) -> Role:
-        role.name =data['name']
-        role.description=data['description']
         
-        if permission_ids is not None:
-            perms: List[Permission] = []
-            perms = db.session.scalars(
-                    db.select(Permission).filter(
-                        Permission.id.in_(permission_ids)
-                    )
-                ).all()
-            role.permissions = list(perms)
+        if "name" in data:
+            role.name=data['name']
+        if "description" in data:
+            role.description=data['description']
+        
+        if permission_ids:
+            permissions = filter_permissions_by_id(permission_ids or [])
+            
+            role.permissions = permissions
 
         db.session.commit()
         return role

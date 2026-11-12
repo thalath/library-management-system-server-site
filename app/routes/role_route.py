@@ -119,7 +119,7 @@ def edit(role_id: int):
             request.get_json(silent=True) or {}
         )
         
-        permission_ids = data.pop("permission_ids")
+        permission_ids = data.pop("permission_ids", None)
         
         updated_role = RoleService.update(role, data, permission_ids)
         
@@ -133,13 +133,7 @@ def edit(role_id: int):
             "message": "Invalid or missing fileds, Please check error and try again later.",
             "error": v_e.messages
         }), 422
-        
-    except Exception as e:
-        return jsonify({
-            "message": "Exception Errors, please check and try again later.",
-            "errors": e
-        }), 500
-        
+
 
 @role_bp.delete("/delete/<int:role_id>")
 @jwt_required()
@@ -159,7 +153,7 @@ def delete(role_id: int):
             "success": True
         }), 200
         
-    except Exception as e:
+    except Exception:
         return jsonify({
             "message": "Exception Error, Please check & try again later.",
             "success": False

@@ -1,5 +1,5 @@
 from marshmallow import Schema, validate, fields, validates, ValidationError
-from ..repositories.role_repository import filter_role_by_name
+from ..repositories.role_repository import get_role_by_name
 from ..repositories.permission_repository import filter_permissions_by_id
 
 class RoleCreateSchema(Schema):
@@ -23,7 +23,7 @@ class RoleCreateSchema(Schema):
     @validates("name")
     def validate_name(self, value, **kwargs):
         
-        existing_name = filter_role_by_name(value)
+        existing_name = get_role_by_name(value)
 
         if existing_name:
             raise ValidationError("The name already exists.")
@@ -31,16 +31,26 @@ class RoleCreateSchema(Schema):
 
 class RoleUpdateSchema(Schema):
     
-    name = fields.String(validate=validate.Length(min=3, max=50))
-    description = fields.String(allow_none=True)
+    name = fields.String(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(min=3, max=50),
+    )
+    
+    description = fields.String(
+        validate=validate.Length(max=100),
+        required=False,
+        allow_none=True
+    )
 
     permission_ids = fields.List(
         fields.Integer(),
+        required=False,
         allow_none=True,
     )
     
     @validates("permission_ids")
-    def validate_permission_ids(self, value, **kwargs):
+    def validate_permissions(self, value, **kwargs):
         
         if value is None:
             return
@@ -57,7 +67,7 @@ class RoleUpdateSchema(Schema):
     @validates("name")
     def validate_name(self, value, **kwargs):
         
-        exist_name = filter_role_by_name(value)
+        exist_name = get_role_by_name(value)
 
         if exist_name:
             raise ValidationError("The name already exists.")

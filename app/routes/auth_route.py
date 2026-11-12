@@ -1,19 +1,23 @@
+import re
+from datetime import datetime, timedelta, timezone
+
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import (jwt_required, create_access_token, 
                                 create_refresh_token, get_jwt_identity,
                                 decode_token, get_jwt, set_access_cookies,
                                 set_refresh_cookies, unset_jwt_cookies)
+from marshmallow import ValidationError
 
+from extensions import db
 from app.services.user_service import UserService
 from app.services.email_service import EmailOTPService
 from app.models.user import User
-from app.models.token_blocklist import TokenBlocklist
 from app.models.role import Role
-from extensions import db
-import re
-from app.utils.otp import generate_otp, verify_otp_hash
-from datetime import datetime, timedelta, timezone
 from app.models.email_otp import EmailOTP
+from app.models.token_blocklist import TokenBlocklist
+from app.schemas.auth_schema import LoginSchema
+from app.repositories.user_repository import filter_user_by_email
+from app.utils.otp import generate_otp, verify_otp_hash
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -66,38 +70,45 @@ def email_verification():
     
 @auth_bp.post("/login")
 def login():
-    data = request.get_json()
-    if not data:
-        return jsonify({
-            "msg": "Invalid or Missing email and password",
-            "status": 404
-        }), 404
+    schema = LoginSchema()
+    
+    try:
+        data = schema.load(
+            request.get_json(silent=True) or {}
+        )
 
-    email = data.get("email", "").strip()
-    password = data.get("password")
-
-    user = User.query.filter_by(email=email).first()
-
-    if user and user.check_password(password):
+        user = filter_user_by_email(data['email'])
+        
+        if not user or not user.check_password(data['password']):
+            return jsonify({
+                "message": "Invalid Email or Password",
+                "status": 401
+            }), 401
+            
         if not user.is_active:
             return jsonify({
-                "msg": "You account is Inactive, Please Contact admin to activate first",
+                "message": "You account is inactive, Please contact an administrator.",
                 "status": 403
             }), 403
-            
+                
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
-        response = jsonify({"msg": "Login successfully."})
-        
+        response = jsonify({
+            "message": "Login successfully.",
+            "status": 200
+        })
+            
         set_access_cookies(response, access_token)
         set_refresh_cookies(response, refresh_token)
-        
+            
         return response, 200
-
-    return jsonify({
-        "msg": "Invalid Email or Password",
-        "status": 401
-    }), 401
+    
+    except ValidationError as v_e:
+        return jsonify({
+            "message": "Validation Failed, Please check error and try again.",
+            "errors": v_e.messages,
+            "status": 422
+        }), 422
 
 
 @auth_bp.post("/register")

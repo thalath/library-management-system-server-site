@@ -22,9 +22,6 @@ class UserService:
         if role_id:
             role = get_role_by_id(role_id)
             
-            if role is None:
-                raise ValueError("Selected role does not exist.")
-            
             user.roles.append(role)
             
         add_user(user)
@@ -33,22 +30,32 @@ class UserService:
 
     @staticmethod
     def update(user: User, data: dict, password: Optional[str] = None, role_id: Optional[int] = None) -> User:
+                
+        if "username" in data:
+            user.username = data["username"]
         
-        fields = ["username", "full_name", "is_active", "email"]
+        if "full_name" in data:
+            user.full_name = data["full_name"]
+            
+        
+        if "is_active" in data:
+            user.is_active = data.get("is_active")
+            
+        if "is_verified" in data:
+            user.is_verified = data.get("is_verified")
 
-        for field in fields:
-            if field in data:
-                setattr(user, field, data[field])
-
-        if password:
+        if "password" in data:
             user.set_password(password)
 
-        if role_id:
-            role = get_role_by_id(role_id)
-            if role is None:
-                raise ValueError("Selected roles does not exists.")
+        if "role_id" in data:
+            role_id = data["role_id"]
             
-            user.roles.append(role)
+            if role_id is None:
+                user.roles = []
+            
+            else:
+                role = get_role_by_id(role_id)
+                user.roles = [role]
 
         db.session.commit()
         return user

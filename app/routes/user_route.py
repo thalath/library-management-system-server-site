@@ -10,13 +10,12 @@ from extensions import db
 import re
 from ..schemas.user_schema import UserCreateSchema, UserUpdateSchema, UserResponseSchema
 
-user_response_schema = UserResponseSchema()
 
 user_bp = Blueprint("users", __name__, url_prefix="/users")
 
 @user_bp.get("/")
-# @jwt_required()
-# @permission_required("user.view")
+@jwt_required()
+@permission_required("user.view")
 def index():
     users = UserService.get_all()
     response_schema = UserResponseSchema(many=True)
@@ -82,7 +81,7 @@ def create():
         
         return jsonify({
             "message": "User created successfully.",
-            "data": user_response_schema.dump(user),
+            "data": user_create_schema.dump(user),
             "status": 201
         }), 201
         
@@ -101,20 +100,22 @@ def edit(user_id: int):
     try:
         user = UserService.get_by_id(user_id)
         
-        user_update_schema = UserUpdateSchema(user_id)
+        user_update_schema = UserUpdateSchema()
+        response = UserResponseSchema()
         
         data = user_update_schema.load(
             request.get_json(silent=True) or {}
         )
         
-        password = data.pop("password")
-        role_id = data.pop("role_id")
+        password = data.pop("password", None)
+        role_id = data.pop("role_id", None)
+        data.pop("is_active", None)
         
         new_user = UserService.update(user, data, password, role_id)
         
         return jsonify({
             "message": "User updated successfully.",
-            "data": user_response_schema(new_user),
+            "data": response.dump(new_user),
             "status": 200
         }), 200
         
@@ -124,6 +125,12 @@ def edit(user_id: int):
             "errors": err.messages,
             "status": 422
         }), 422
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Error",
+            "errors": str(e)
+        }), 500
     
 
 @user_bp.delete("/delete/<int:user_id>")
