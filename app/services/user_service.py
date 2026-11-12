@@ -51,10 +51,10 @@ class UserService:
             
             if role_id is None:
                 user.roles = []
-            
             else:
                 role = get_role_by_id(role_id)
                 user.roles = [role]
+
 
         db.session.commit()
         return user
