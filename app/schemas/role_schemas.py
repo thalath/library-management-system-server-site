@@ -19,11 +19,26 @@ class RoleCreateSchema(Schema):
         required=True,
         validate=validate.Length(min=1)
     )
+    
+    @pre_load
+    def normalize_data(self, data, **kwargs):
+        if not isinstance(data, dict):
+            return
+        
+        data = data.copy()
+        
+        if isinstance(data.get("name"), str):
+            data["name"] = data["name"].strip()
+        
+        return data
 
     @validates("name")
     def validate_name(self, value, **kwargs):
         
-        existing_name = Role.query.filter_by(name=value).first()
+        if value is None:
+            return
+        
+        existing_name = Role.query.filter(func.lower(Role.name)==value.lower()).first()
 
         if existing_name:
             raise ValidationError("The name already exists.")
@@ -108,4 +123,4 @@ class RoleResponseSchema(Schema):
         return [perm.name for perm in obj.permissions]
     
     def get_users(self, obj):
-        return [{"full_name": user.full_name, "email": user.email } for user in obj.users]
+        return [{"full_name": user.full_name, "email": user.email} for user in obj.users]
