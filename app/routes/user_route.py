@@ -3,11 +3,7 @@ from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
 
 from app.services.user_service import UserService
-from app.models.user import User
-from app.models.role import Role
 from middleware.permission_extended import permission_required
-from extensions import db
-import re
 from ..schemas.user_schema import UserCreateSchema, UserUpdateSchema, UserResponseSchema
 
 
@@ -17,49 +13,48 @@ user_bp = Blueprint("users", __name__, url_prefix="/users")
 @jwt_required()
 @permission_required("user.view")
 def index():
-    users = UserService.get_all()
-    response_schema = UserResponseSchema(many=True)
-    if users is None:
+    try:
+        users = UserService.get_all()
+        response = UserResponseSchema(many=True)
+        
+        if not users:
+            return jsonify({
+                "message": "User not found.",
+                "status": 404
+            }), 404
+            
+        return jsonify(response.dump(users)), 200
+    
+    except Exception as e:
         return jsonify({
-            "message": "Users not found.",
-            "status": 404
-        }), 404
-
-    if users:
-        return jsonify({
-            "message": "Users retrived successfully",
-            "status": 200,
-            "data": response_schema.dump(users)
-        }), 200
-
-    return jsonify({
-        "message": "An internal backend error occured.",
-        "status": 500
-    }), 500
+            "message": "Exception errors, Please try again.",
+            "status": 500
+        }), 500
 
 
 @user_bp.get("/detail/<int:user_id>")
 @jwt_required()
 @permission_required("user.detail")
 def detail(user_id: int):
-    user = UserService.get_by_id(user_id)
-    if user is None:
+    
+    response = UserResponseSchema()
+    
+    try:
+        user = UserService.get_by_id(user_id)
+        
+        if not user:
+            return jsonify({
+                "message": f"User with ID: {user_id} was not found.",
+                "status": 404
+            }), 404
+            
+        return jsonify({response.dump(user)}), 200
+        
+    except Exception as e:
         return jsonify({
-            "msg": f"User with ID: {user_id} was not found",
-            "status": 404
-        }), 404
-
-    if user is not None:
-        return jsonify({
-            "msg": "User retrived successfully",
-            "status": 200,
-            "data": user.to_dict()
-        }), 200
-
-    return jsonify({
-        "msg": "An internal Backend error occured.",
-        "status": 500
-    }), 500
+            "message": "Exception errors, Please check and try again.",
+            "status": 500
+        }), 500
 
 @user_bp.post("/create")
 @jwt_required()
@@ -72,12 +67,9 @@ def create():
         )
         
         password = data.pop("password")
-        data.pop("confirmation_password")
-        
-        role_id = data.pop("role_id")
+        role_id = data.pop("role_id", None)
         
         user = UserService.create(data, password, role_id)
-        
         
         return jsonify({
             "message": "User created successfully.",
@@ -91,6 +83,13 @@ def create():
             "errors": err.messages,
             "status": 422
         }), 422
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Exception Error, Please check API and try again.",
+            "status": 500,
+            "errors": str(e)
+        }), 500
         
 
 @user_bp.put("/edit/<int:user_id>")
@@ -137,16 +136,23 @@ def edit(user_id: int):
 @jwt_required()
 @permission_required("user.delete")
 def delete(user_id: int):
-    user = UserService.get_by_id(user_id)
-    if not user or user is None:
+    try:
+        user = UserService.get_by_id(user_id)
+        if not user:
+            return jsonify({
+                "msg": f"User with ID: {user_id} was not found.",
+                "status": 404
+            }), 404
+
+        UserService.delete(user)
+
         return jsonify({
-            "msg": f"User with ID: {user_id} was not found.",
-            "status": 404
-        }), 404
-
-    UserService.delete(user)
-
-    return jsonify({
-        "msg": "User deleted successfully",
-        "status": 200
-    }), 200
+            "msg": "User deleted successfully",
+            "status": 200
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Exception error, Please check API and try again.",
+            "errors": str(e)
+        }), 500

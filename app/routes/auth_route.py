@@ -109,6 +109,12 @@ def login():
             "errors": v_e.messages,
             "status": 422
         }), 422
+    
+    except Exception as e:
+        return jsonify({
+            "message": "Exception error",
+            "errors": str(e)
+        }), 500
 
 
 @auth_bp.post("/register")
