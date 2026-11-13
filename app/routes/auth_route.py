@@ -217,15 +217,6 @@ def forgot_password():
             f"{current_app.config["FRONTEND_URL"]}"
             f"/reset-password?token={token}"
         )
-
-        email_otp = EmailOTPService.create_otp(
-            purpose="forget_password",
-            minutes=5,
-            user_id=user.id,
-            otp=otp
-        )
-        if email_otp:
-            EmailOTPService.send_otp(user.email, user.full_name, otp)
         
         response = jsonify({
             "message": "OTP was sent, Please verify your OTP.",
