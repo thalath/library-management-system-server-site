@@ -28,7 +28,7 @@ class UserService:
             
 
     @staticmethod
-    def update(user: User, data: dict, password: Optional[str] = None, role_id: Optional[int] = None) -> User:
+    def update(user: User, data: dict = {}, password: Optional[str] = None, role_id: Optional[int] = None) -> User:
                 
         if "username" in data:
             user.username = data["username"]
@@ -43,18 +43,15 @@ class UserService:
         if "is_verified" in data:
             user.is_verified = data.get("is_verified")
 
-        if "password" in data:
+        if password:
             user.set_password(password)
 
         if "role_id" in data:
             role_id = data["role_id"]
             
             if role_id is None:
-                user.roles = []
-            else:
                 role = get_role_by_id(role_id)
                 user.roles = [role]
-
 
         db.session.commit()
         return user
