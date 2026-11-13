@@ -1,5 +1,6 @@
 import re
-from marshmallow import fields, validate, validates_schema, ValidationError, Schema
+from marshmallow import fields, validate, validates, validates_schema, ValidationError, Schema
+from ..repositories.user_repository import filter_user_by_email
 
 # ========= Strong password helper ================
 def strong_password(value):
@@ -70,10 +71,17 @@ class ForgetPasswordSchema(Schema):
         required=True
     )
     
+    @validates("email")
+    def vaidate_email(self, value, **kwargs):
+        if not isinstance(value, str):
+            return
+        
+        value = value.strip()
+        email = filter_user_by_email(value)
+        if not email:
+            raise ValidationError("Selected email do not exist.")
+    
 class ResetPasswordSchema(Schema):
-    token = fields.String(
-        required=True
-    )
     
     new_password = fields.String(
         required=True,
@@ -81,9 +89,15 @@ class ResetPasswordSchema(Schema):
         validate=[strong_password]
     )
     
+    confirmation_password = fields.String(
+        required=True,
+        load_only=True,
+        validate=[strong_password]
+    )
+    
     @validates_schema
     def validate_confirmation_password(self, data, **kwargs):
-        if data['password'] != data['confirmation_password']:
+        if data['new_password'] != data['confirmation_password']:
             raise ValidationError({
                 "confirmation_password": [
                     "Password must matched."

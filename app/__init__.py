@@ -12,8 +12,7 @@ def create_app(class_config: type[Config] = Config):
     migrate.init_app(app, db)
     cors.init_app(
         app,
-        resources={r"/*": {"origins": "http://127.0.0.1:5173"}},
-        # origins="http://127.0.0.1:5173",
+        resources={r"/*": {"origins": app.config["FRONTEND_URL"]}},
         supports_credentials=True
     )
     

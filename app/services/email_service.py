@@ -1,15 +1,14 @@
-import os
 import smtplib
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from typing import List, Optional
 
 from flask import current_app
 
 from extensions import db
-from app.utils.otp import hash_otp
-from app.models.user import User
 from app.models.email_otp import EmailOTP
-from datetime import datetime, timedelta
+from app.utils.otp import hash_otp, verify_otp_hash
+from app.repositories.user_repository import get_user_by_id
 
 
 class EmailOTPService:
@@ -22,44 +21,65 @@ class EmailOTPService:
         return db.session.get(EmailOTP, otp_id)
     
     @staticmethod
-    def create_email_otp(data: dict, user_id: Optional[int] = None, otp: Optional[str] = None) -> EmailOTP:
+    def create_otp(
+        purpose: Optional[str] = "email_verification", 
+        user_id: Optional[int] = None, 
+        otp: Optional[str] = None,
+        minutes=10
+    ) -> Optional[EmailOTP]:
         email_otp = EmailOTP(
-            expired_at = data.get('expired_at', datetime.utcnow() + timedelta(minutes=5)),
-            is_used = data.get('is_used', False),
-            attempts = data.get('attemps', 0),
-            purpose = data['purpose']
+            purpose = purpose,
+            expired_at = datetime.utcnow() + timedelta(minutes=minutes),
+            attempts = 0,
+            is_used = False,
         )
-
-        if otp:
-            email_otp.otp_hash = hash_otp(otp)
         
         if user_id:
-            user = db.session.get(User, user_id)
+            user = get_user_by_id(user_id)
             if user:
-                email_otp.user = user
-                email_otp.user_id = user.id
-
+                email_otp.user_id = user_id
+        if otp:
+            email_otp.otp_hash = hash_otp(otp)
+            
         db.session.add(email_otp)
         db.session.commit()
         return email_otp
 
     @staticmethod
-    def update_email_otp(email_otp: EmailOTP, data: dict, user_id: Optional[int] = None) -> EmailOTP:
-        email_otp.otp_hash = data.get("otp", email_otp.otp_hash)
-        email_otp.is_used = data.get("is_used", email_otp.is_used)
-        email_otp.attempts = data.get("attempts", email_otp.attempts)
-        email_otp.purpose = data.get("purpose", email_otp.purpose)
-        if user_id:
-            user = db.session.get(User, user_id)
-            if user:
-                email_otp.user_id = data.get("user_id", email_otp.user_id)
+    def verify(user_id: int, otp: str, purpose: str) -> Optional[EmailOTP]:
+        verification = EmailOTP.query.filter_by(
+            user_id=user_id,
+            purpose=purpose,
+            is_used=False
+        ).order_by(
+            EmailOTP.created_at.desc()
+        ).first()
+        
+        if not verification:
+            return None
+        
+        if verification.expired_at < datetime.utcnow():
+            return None
+        
+        if verification.attempts >= 5:
+            return None
+        
+        if not verify_otp_hash(otp, verification.otp_hash):
+            verification.attempts += 1
+            db.session.commit()
+            
+            return None
+
+        verification.is_used = True
+        
         db.session.commit()
-        return email_otp
+
+        return verification
 
 
     # ================== Send OTP to email =======================
     @staticmethod
-    def send_otp_email(receiver_email, full_name, otp):
+    def send_otp(receiver_email, full_name, otp):
         sender_email = current_app.config["MAIL_USERNAME"]
         sender_password = current_app.config["MAIL_PASSWORD"]
 

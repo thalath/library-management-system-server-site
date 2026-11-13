@@ -44,3 +44,5 @@ class Config:
     
     MAIL_USERNAME = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+
+    FRONTEND_URL = os.getenv("FRONTEND_URL")
