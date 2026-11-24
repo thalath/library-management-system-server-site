@@ -13,19 +13,19 @@ def permission_required(permission_code: str):
             user = User.query.get(user_id)
             if not user:
                 return jsonify({
-                    "msg": "User not found",
+                    "message": "User not found",
                     "status": 404
                 }), 404
 
             if user and not user.is_active:
                 return jsonify({
-                    "msg": "You account is inactive",
+                    "message": "You account is inactive",
                     "status": 403
                 }),403
 
             if user and not user.has_permission(permission_code):
                 return jsonify({
-                    "msg": "You do not have permission to perform this action.",
+                    "message": "You do not have permission to perform this action.",
                     "status": 403
                 }), 403
 

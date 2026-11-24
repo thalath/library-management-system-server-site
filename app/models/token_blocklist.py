@@ -14,7 +14,7 @@ class TokenBlocklist(db.Model):
 def check_if_token_revoked(jwt_header, jwt_payload):
     jti = jwt_payload['jti']
     token = db.session.scalar(
-            db.select(TokenBlocklist).filter(TokenBlocklist.jti == jti)
+        db.select(TokenBlocklist).filter(TokenBlocklist.jti == jti)
     )
 
     return token is not None

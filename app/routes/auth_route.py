@@ -262,7 +262,7 @@ def reset_password():
         data.pop("confirmation_password", None)
     
         user = get_user_by_id(user_id)
-        UserService.update(user=user,password=new_password)
+        UserService.update(user=user, password=new_password)
         return jsonify({
             "message": "password reset successfully."
         }), 200
@@ -279,7 +279,7 @@ def refresh():
     current_user_id = get_jwt_identity()
     new_access_token = create_access_token(identity=str(current_user_id))
     response = jsonify({
-        "msg": "Refresh successfully",
+        "message": "Refresh successfully",
         "access_token": new_access_token
     })
     
@@ -306,7 +306,7 @@ def logout():
         except Exception:
             pass
     db.session.commit()
-    response = jsonify({"msg": "Successful logged out of all sessions."})
+    response = jsonify({"message": "Successful logged out of all sessions."})
     unset_jwt_cookies(response)
     
     return response, 200
