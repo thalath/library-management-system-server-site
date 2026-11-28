@@ -1,6 +1,6 @@
 from flask import request, jsonify
 
-def registered_error_handlers(app):
+def register_errorhandlers(app):
 
     @app.errorhandler(404)
     def handle_error_not_found(error):
@@ -29,3 +29,12 @@ def registered_error_handlers(app):
             "status": 500,
             "path": request.path
         }), 500
+
+    @app.errorhandler(400)
+    def handle_error_bad_request(error):
+        return jsonify({
+            "message": error.messages if error else "Bad request.",
+            "error": "Bad request",
+            "status": 400,
+            "path": request.path
+        }), 400

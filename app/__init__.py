@@ -1,7 +1,7 @@
 from flask import Flask
 from config import Config
 from extensions import db, jwt_manager, cors, migrate
-from .utils.error_handlers import registered_error_handlers
+from .utils import register_errorhandlers, get_favicon
 
 def create_app(class_config: type[Config] = Config):
     app = Flask(__name__)
@@ -33,8 +33,11 @@ def create_app(class_config: type[Config] = Config):
     from app.models.role import Role
     from app.models.token_blocklist import TokenBlocklist
     from app.models.email_otp import EmailOTP
+    
+    # === export function from utils ==========
+    register_errorhandlers(app)
+    get_favicon(app)
 
-    registered_error_handlers(app)
     with app.app_context():
         from app.models.token_blocklist import cleanup_expired_tokens
         cleanup_expired_tokens()
